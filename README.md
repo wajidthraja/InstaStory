@@ -33,6 +33,17 @@ Android app that turns a video and a short description into a ready-to-post Inst
 
 **Honest limit:** this version is rule-based and offline. It restyles and frames *your* words; it doesn't invent new jokes about your topic. For that, the next step is an AI rewrite through a small backend (see Next steps).
 
+## Find videos online (Pexels)
+
+In step 2, **Find online** searches free stock videos on Pexels using words from your context (for example "rain", "beach", or a scene that fits the mood, like "studying at night"). Tap a clip to download and use it. Pexels videos are free to use and edit, including on social media, with no attribution required; see pexels.com/license.
+
+One-time setup:
+1. Create a free account at **pexels.com/api** and copy your API key.
+2. In this GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**. Name: `PEXELS_API_KEY`, value: your key.
+3. **Actions → Build APK → Run workflow**, then install the new APK.
+
+Without the key, the app works as before and "Find online" explains how to add it.
+
 ## Install on your phone (no Android Studio needed)
 
 1. Create a new **private** repository on GitHub and upload this whole folder (or `git push` it).
