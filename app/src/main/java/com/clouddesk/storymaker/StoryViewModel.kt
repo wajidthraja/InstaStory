@@ -19,7 +19,7 @@ import java.io.File
 
 class StoryViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val generator: ScriptGenerator = LocalScriptGenerator()
+    private val generator = LocalScriptGenerator()
     private val renderer = StoryRenderer(app)
     private var player: MediaPlayer? = null
     private var previewJob: Job? = null
@@ -47,7 +47,29 @@ class StoryViewModel(app: Application) : AndroidViewModel(app) {
     val canGenerate get() = videoUri != null && contextText.isNotBlank()
     val canRender get() = videoUri != null && lines.any { it.isNotBlank() } && clipDurationMs > 0 && !rendering
 
+    // Online (Pexels) video
+    var downloadProgress by mutableStateOf<Float?>(null); private set   // non-null while downloading
+    var videoCredit by mutableStateOf<String?>(null); private set
+
+    /** Search words for the online video picker, from what the user has written so far. */
+    fun suggestedVideoQuery(): String =
+        OnlineVideos.suggestQuery(contextText, if (contextText.isBlank()) Mood.CALM else generator.detectMood(contextText))
+
+    fun useOnlineVideo(video: StockVideo) {
+        downloadProgress = 0f
+        viewModelScope.launch {
+            runCatching { OnlineVideos.download(getApplication(), video) { downloadProgress = it } }
+                .onSuccess { file ->
+                    downloadProgress = null
+                    onVideoPicked(Uri.fromFile(file))
+                    videoCredit = "Video by ${video.author} on Pexels"
+                }
+                .onFailure { downloadProgress = null; message = it.message ?: "Download failed. Check your internet connection." }
+        }
+    }
+
     fun onVideoPicked(uri: Uri) {
+        videoCredit = null
         videoUri = uri
         result = null
         viewModelScope.launch {

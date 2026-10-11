@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
 private fun StoryScreen(vm: StoryViewModel) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
+    var showOnline by remember { mutableStateOf(false) }
 
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) vm.onVideoPicked(uri)
@@ -82,25 +83,8 @@ private fun StoryScreen(vm: StoryViewModel) {
         ) {
             Text("Story Maker", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
-            // 1. Video
-            Step(1, "Choose your video") {
-                OutlinedButton(onClick = {
-                    pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                }) {
-                    Icon(Icons.Default.VideoLibrary, null); Spacer(Modifier.width(8.dp))
-                    Text(if (vm.videoUri == null) "Pick from gallery" else "Change video")
-                }
-                vm.videoInfo?.takeIf { it.durationMs > 0 }?.let {
-                    Text(
-                        "Length: ${it.durationMs / 1000}s" + if (it.durationMs > StorySpec.MAX_DURATION_MS) " (first 60s used)" else "",
-                        color = Color.Gray, fontSize = 13.sp,
-                    )
-                }
-                Text("Use video you shot yourself, or royalty-free footage.", color = Color.Gray, fontSize = 12.sp)
-            }
-
-            // 2. Context
-            Step(2, "Explain the context") {
+            // 1. Context first, so the app can also find a matching video online.
+            Step(1, "Explain the context") {
                 OutlinedTextField(
                     value = vm.contextText,
                     onValueChange = { vm.contextText = it },
@@ -118,10 +102,38 @@ private fun StoryScreen(vm: StoryViewModel) {
                 )
                 Text("Tone", color = Color.Gray, fontSize = 13.sp)
                 Chips(Tone.entries, vm.tone, { it.label }) { vm.selectTone(it) }
+            }
+
+            // 2. Video: your own, or a free stock clip found from the context.
+            Step(2, "Choose a video") {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = {
+                        pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                    }) { Icon(Icons.Default.VideoLibrary, null); Spacer(Modifier.width(6.dp)); Text("My gallery") }
+                    OutlinedButton(onClick = { showOnline = true }, enabled = vm.downloadProgress == null) {
+                        Icon(Icons.Default.TravelExplore, null); Spacer(Modifier.width(6.dp)); Text("Find online")
+                    }
+                }
+                vm.downloadProgress?.let { p ->
+                    LinearProgressIndicator(progress = { p }, Modifier.fillMaxWidth())
+                    Text("Downloading video… ${(p * 100).toInt()}%", color = Color.Gray, fontSize = 13.sp)
+                }
+                vm.videoInfo?.takeIf { it.durationMs > 0 && vm.downloadProgress == null }?.let {
+                    Text(
+                        "Video ready · ${it.durationMs / 1000}s" + if (it.durationMs > StorySpec.MAX_DURATION_MS) " (first 60s used)" else "",
+                        color = Color.Gray, fontSize = 13.sp,
+                    )
+                }
+                vm.videoCredit?.let { Text(it, color = Color.Gray, fontSize = 12.sp) }
                 Button(onClick = vm::generate, enabled = vm.canGenerate) {
                     Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(8.dp)); Text("Build my Story")
                 }
+                if (!vm.canGenerate) Text(
+                    if (vm.contextText.isBlank()) "Write the context, then choose a video." else "Choose a video to continue.",
+                    color = Color.Gray, fontSize = 12.sp,
+                )
             }
+            if (showOnline) OnlineVideoSheet(vm, onDismiss = { showOnline = false })
 
             // 3. Review & adjust
             if (vm.lines.isNotEmpty()) {

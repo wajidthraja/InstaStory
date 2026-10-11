@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Online video search (Pexels) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Needed so the app can check whether Instagram is installed (Android 11+ package visibility). -->
     <queries>
         <package android:name="com.instagram.android" />
