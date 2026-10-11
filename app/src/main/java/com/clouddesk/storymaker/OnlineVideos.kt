@@ -12,8 +12,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-/** One stock clip from Pexels. Free to use and modify, including on social media (Pexels license). */
+/** One stock clip from Pixabay or Pexels. Both licenses allow free use and editing, including on social media. */
 data class StockVideo(
+    val source: String,        // "Pixabay" or "Pexels"
     val id: Long,
     val thumbUrl: String,
     val durationSec: Int,
@@ -25,12 +26,16 @@ data class StockVideo(
 )
 
 /**
- * Searches Pexels for portrait videos that match the Story's context.
- * The API key comes from the build (GitHub secret PEXELS_API_KEY); it is free from pexels.com/api.
+ * Searches free stock-video libraries for clips that match the Story's context.
+ * Keys come from the build (GitHub secrets PIXABAY_API_KEY and/or PEXELS_API_KEY), both free.
+ * Pixabay is used when its key is set; otherwise Pexels.
  */
 object OnlineVideos {
 
-    val hasKey: Boolean get() = BuildConfig.PEXELS_API_KEY.isNotBlank()
+    private val usePixabay get() = BuildConfig.PIXABAY_API_KEY.isNotBlank()
+    val hasKey: Boolean get() = usePixabay || BuildConfig.PEXELS_API_KEY.isNotBlank()
+    val sourceName: String get() = if (usePixabay) "Pixabay" else "Pexels"
+    val sourceUrl: String get() = if (usePixabay) "https://pixabay.com" else "https://www.pexels.com"
 
     /** Search words for a scene the user mentions; otherwise a scene that fits the mood. */
     fun suggestQuery(context: String, mood: Mood): String {
@@ -39,7 +44,53 @@ object OnlineVideos {
         return if (scenes.isNotEmpty()) scenes.take(2).joinToString(" ") else MOOD_SCENES.getValue(mood)
     }
 
-    suspend fun search(query: String, page: Int = 1): List<StockVideo> = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, page: Int = 1): List<StockVideo> =
+        if (usePixabay) searchPixabay(query, page) else searchPexels(query, page)
+
+    private suspend fun searchPixabay(query: String, page: Int): List<StockVideo> = withContext(Dispatchers.IO) {
+        val q = URLEncoder.encode(query.trim(), "UTF-8")
+        val url = URL("https://pixabay.com/api/videos/?key=${BuildConfig.PIXABAY_API_KEY}&q=$q&safesearch=true&per_page=24&page=$page")
+        val conn = (url.openConnection() as HttpURLConnection).apply { connectTimeout = 15_000; readTimeout = 20_000 }
+        try {
+            when (conn.responseCode) {
+                200 -> Unit
+                400 -> if (page > 1) return@withContext emptyList() else error("Search failed. Check the PIXABAY_API_KEY secret.")
+                401, 403 -> error("The Pixabay API key isn't valid. Check the PIXABAY_API_KEY secret.")
+                429 -> error("Too many searches in a minute. Wait a moment and try again.")
+                else -> error("Search failed (HTTP ${conn.responseCode}).")
+            }
+            val hits = JSONObject(conn.inputStream.bufferedReader().readText()).getJSONArray("hits")
+            (0 until hits.length()).mapNotNull { parsePixabay(hits.getJSONObject(it)) }
+                .sortedByDescending { it.fileHeight > it.fileWidth }   // portrait clips first; others get cropped to 9:16
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun parsePixabay(v: JSONObject): StockVideo? {
+        val renditions = v.optJSONObject("videos") ?: return null
+        val all = listOf("large", "medium", "small", "tiny").mapNotNull { renditions.optJSONObject(it) }
+            .filter { it.optString("url").isNotBlank() && it.optInt("width") > 0 }
+        // Largest file that isn't bigger than a 1080x1920 Story needs (skips 4K downloads).
+        val best = all.filter { maxOf(it.optInt("width"), it.optInt("height")) <= 1920 }.maxByOrNull { it.optInt("height") }
+            ?: all.minByOrNull { it.optInt("height") } ?: return null
+        val thumb = all.firstNotNullOfOrNull { it.optString("thumbnail").takeIf { t -> t.isNotBlank() } }
+            ?: v.optString("picture_id").takeIf { it.isNotBlank() }?.let { "https://i.vimeocdn.com/video/${it}_295x166.jpg" }
+            ?: ""
+        return StockVideo(
+            source = "Pixabay",
+            id = v.getLong("id"),
+            thumbUrl = thumb,
+            durationSec = v.optInt("duration"),
+            author = v.optString("user").ifBlank { "Pixabay" },
+            pageUrl = v.optString("pageURL"),
+            fileUrl = best.getString("url"),
+            fileWidth = best.optInt("width"),
+            fileHeight = best.optInt("height"),
+        )
+    }
+
+    private suspend fun searchPexels(query: String, page: Int): List<StockVideo> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
         val url = URL("https://api.pexels.com/videos/search?query=$q&orientation=portrait&size=medium&per_page=24&page=$page")
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -56,13 +107,13 @@ object OnlineVideos {
             }
             val json = JSONObject(conn.inputStream.bufferedReader().readText())
             val videos = json.getJSONArray("videos")
-            (0 until videos.length()).mapNotNull { i -> parse(videos.getJSONObject(i)) }
+            (0 until videos.length()).mapNotNull { i -> parsePexels(videos.getJSONObject(i)) }
         } finally {
             conn.disconnect()
         }
     }
 
-    private fun parse(v: JSONObject): StockVideo? {
+    private fun parsePexels(v: JSONObject): StockVideo? {
         val files = v.getJSONArray("video_files")
         // Best file for a 1080x1920 Story: a portrait MP4 at or just under 1920 tall; avoid 4K downloads.
         val candidates = (0 until files.length()).map { files.getJSONObject(it) }
@@ -74,6 +125,7 @@ object OnlineVideos {
             ?: return null
         val user = v.optJSONObject("user")
         return StockVideo(
+            source = "Pexels",
             id = v.getLong("id"),
             thumbUrl = v.optString("image"),
             durationSec = v.optInt("duration"),
@@ -89,7 +141,7 @@ object OnlineVideos {
     suspend fun download(context: Context, video: StockVideo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "online").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
-        val out = File(dir, "pexels_${video.id}.mp4")
+        val out = File(dir, "${video.source.lowercase()}_${video.id}.mp4")
         val conn = (URL(video.fileUrl).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 30_000
@@ -123,6 +175,7 @@ object OnlineVideos {
     private val thumbs = LruCache<String, Bitmap>(40)
 
     suspend fun thumbnail(url: String): Bitmap? {
+        if (url.isBlank()) return null
         thumbs.get(url)?.let { return it }
         return withContext(Dispatchers.IO) {
             runCatching {

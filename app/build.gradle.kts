@@ -6,6 +6,7 @@ plugins {
 
 val facebookAppId: String = (project.findProperty("facebookAppId") as String?).orEmpty()
 val pexelsApiKey: String = (project.findProperty("pexelsApiKey") as String?).orEmpty()
+val pixabayApiKey: String = (project.findProperty("pixabayApiKey") as String?).orEmpty()
 
 android {
     namespace = "com.clouddesk.storymaker"
@@ -19,6 +20,7 @@ android {
         versionName = "0.2.0"
         buildConfigField("String", "FACEBOOK_APP_ID", "\"$facebookAppId\"")
         buildConfigField("String", "PEXELS_API_KEY", "\"$pexelsApiKey\"")
+        buildConfigField("String", "PIXABAY_API_KEY", "\"$pixabayApiKey\"")
     }
 
     // Fixed key so every new APK installs over the previous one (updates keep your data).

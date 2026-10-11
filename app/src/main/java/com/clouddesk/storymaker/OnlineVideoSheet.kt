@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** Bottom sheet: search Pexels with words taken from the context, tap a clip to use it. */
+/** Bottom sheet: search free stock videos with words taken from the context, tap a clip to use it. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnlineVideoSheet(vm: StoryViewModel, onDismiss: () -> Unit) {
@@ -51,7 +51,7 @@ fun OnlineVideoSheet(vm: StoryViewModel, onDismiss: () -> Unit) {
                 .onSuccess { found ->
                     results = if (nextPage == 1) found else results + found
                     page = nextPage
-                    if (found.isEmpty() && nextPage == 1) error = "No portrait videos for \"$query\". Try simpler words, e.g. \"rain\" or \"books\"."
+                    if (found.isEmpty() && nextPage == 1) error = "No videos for \"$query\". Try simpler words, e.g. \"rain\" or \"books\"."
                 }
                 .onFailure { error = it.message ?: "Couldn't search. Check your internet connection." }
             loading = false
@@ -67,13 +67,13 @@ fun OnlineVideoSheet(vm: StoryViewModel, onDismiss: () -> Unit) {
     ) {
         Column(Modifier.padding(horizontal = 16.dp).fillMaxHeight(0.92f)) {
             Text("Find a video online", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Free stock clips from Pexels, matched to your context", color = Color.Gray, fontSize = 12.sp)
+            Text("Free stock clips from ${OnlineVideos.sourceName}, matched to your context", color = Color.Gray, fontSize = 12.sp)
             Spacer(Modifier.height(10.dp))
 
             if (!OnlineVideos.hasKey) {
                 Text(
-                    "Online search needs a free Pexels API key. Get one at pexels.com/api, then add it to your GitHub repo " +
-                        "as a secret named PEXELS_API_KEY and run the build again.",
+                    "Online search needs a free Pixabay API key. Sign up at pixabay.com, open pixabay.com/api/docs to see " +
+                        "your key, add it to your GitHub repo as a secret named PIXABAY_API_KEY, and run the build again.",
                     color = Color(0xFFFFB38A), fontSize = 14.sp,
                 )
                 return@Column
@@ -108,12 +108,12 @@ fun OnlineVideoSheet(vm: StoryViewModel, onDismiss: () -> Unit) {
                         TextButton(onClick = { runSearch(page + 1) }, enabled = !loading) {
                             Text(if (loading) "Loading…" else "Show more")
                         }
-                        // Pexels API guidelines: show a link to Pexels wherever its content appears.
+                        // Pixabay and Pexels API terms: show where the results come from, with a link.
                         Text(
-                            "Videos provided by Pexels",
+                            "Videos provided by ${OnlineVideos.sourceName}",
                             color = Color(0xFF9EC1FF), fontSize = 12.sp,
                             modifier = Modifier
-                                .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.pexels.com"))) }
+                                .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(OnlineVideos.sourceUrl))) }
                                 .padding(8.dp),
                         )
                         Spacer(Modifier.height(16.dp))

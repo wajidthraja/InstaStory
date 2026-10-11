@@ -62,7 +62,7 @@ class StoryViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess { file ->
                     downloadProgress = null
                     onVideoPicked(Uri.fromFile(file))
-                    videoCredit = "Video by ${video.author} on Pexels"
+                    videoCredit = "Video by ${video.author} on ${video.source}"
                 }
                 .onFailure { downloadProgress = null; message = it.message ?: "Download failed. Check your internet connection." }
         }
