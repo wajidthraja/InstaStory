@@ -69,7 +69,7 @@ class StoryRenderer(private val context: Context) {
             Presentation.createForWidthAndHeight(
                 StorySpec.WIDTH, StorySpec.HEIGHT, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
             ),
-            OverlayEffect(ImmutableList.of(StoryOverlay(request.lines, request.template))),
+            OverlayEffect(ImmutableList.of<androidx.media3.effect.TextureOverlay>(StoryOverlay(request.lines, request.template))),
         )
 
         val hasMusic = request.musicUri != null
